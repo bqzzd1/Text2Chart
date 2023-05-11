@@ -4,14 +4,21 @@
     <el-container>
       <el-header>
         <el-row :gutter='12'>
-          <el-col :span='12' :offset="5">
+                    <!-- 添加 logo -->
+        <a href="#" style="display: inline-block;">
+          <img src="//wordpress-1308610994.cos.ap-nanjing.myqcloud.com/img/20230510130025-transformed.png" alt="" style="height: 50px; width: auto;transform: scale(1.8);margin-left: 40px;" />
+          <!-- <img src="/assets/logo.png" alt="" style="height: 50px; width: auto;transform: scale(1.8);margin-left: 40px;" /> -->
+
+        </a>
+          <el-col :span='12' :offset="5" style="text-align: center;margin-left: 200px;">
             <el-input class="input_1" v-model="inputValue" placeholder="请输入你想要绘制的流程" @keyup.enter="handleSubmit" />
           </el-col>
           <el-col :span='2'>
             <el-button class='button_1' @click="handleSubmit" style="width: 100%;" :loading="loading"
               :disabled="loading">生 成</el-button>
           </el-col>
-          <el-col :span="1" style="margin-right:8px"  >
+        
+          <!-- <el-col :span="1" style="margin-right:8px"  >
               <el-popover
                 width="300"
                 :visible="visible"
@@ -25,11 +32,11 @@
               </template>
 
             </el-popover>
-          </el-col>
+          </el-col> -->
         </el-row>
       </el-header>
       <el-main class="main ">
-        <div style="display: flex; justify-content: flex-end;">
+        <div style="display: flex; justify-content: flex-end;margin-right: 20px;">
           <el-button class='button' @click="drawer = true">更新流程图</el-button>
           <el-button class='button' @click="downloadImage">下载为PNG</el-button>
         </div>
@@ -52,6 +59,9 @@ import mermaid from 'mermaid'
 import { ElMessage, ElConfigProvider, ElIcon } from 'element-plus'
 import html2canvas from 'html2canvas'
 import { Edit } from '@element-plus/icons-vue'
+import axios from 'axios';
+
+
 
 // @keyup.enter="handleSubmit"
 const drawer = ref(false)
@@ -70,8 +80,12 @@ const drawDiagram = async function (graphDefinition) {
   // const { svg } = await mermaid.render('mermaid', graphDefinition);
   // document.querySelector('.mermaid').innerHTML = svg;
   try {
+    if (graphDefinition === null) {
+      document.querySelector('.mermaid').innerHTML = null;
+    }else{
     const { svg } = await mermaid.render('mermaid', graphDefinition);
     document.querySelector('.mermaid').innerHTML = svg;
+    }
   } catch (error) {
     const errorElement = document.createElement('div');
     errorElement.innerText = error.toString();
@@ -108,15 +122,11 @@ export default {
         return
       }
       // handle form submission here
-      const prompt = "请使用输出Mermaid以下需求。" + inputValue.value + " 注意需要将文本中出现的中文符号替换为英文符号，" + "不要写任何解释或其他文字，只需回复Mermiad图的文本即可。";
-      chatopenai(prompt, openaikey).then((res) => {
+      chatopenai(inputValue.value).then((res) => {
         // const mermaid_reuslt = processDiagram(res);
         drawDiagram(res);
         textarea2.value = res;
         loading.value = false;
-      }).catch((error) => {
-        // throw new Error('Diagram error not found.');
-        ElMessage.error('抱歉，API调用失败请重试')
       });
     }
     const updateDiagram = async function () {
@@ -169,33 +179,38 @@ export default {
   }
 }
 
-// 创建一个同步的函数，用于获取openai的返回值,"使用mermaid绘制TCP连接流程图,
-
-async function chatopenai(content_1, key) {
-  console.log(content_1)
-  loading.value = true;
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': "Bearer " + key.value
-    },
-    body: JSON.stringify({
-      "model": "gpt-3.5-turbo",
-      "messages": [{ "role": "user", "content": content_1 },],
-    })
-  })
-  const data = await response.json()
-  console.log(data);
-  const mermaidRegex = /```mermaid\n([\s\S]*?)\n```/;
-  // const match = data.choices[0].text.match(mermaidRegex);
-  const match = typeof data.choices['0'].message.content === 'string' ? data.choices['0'].message.content.match(mermaidRegex) : null;
-  console.log(match);
-  const mermaidData = match ? match[1] : null;
-  console.log(mermaidData);
-  loading.value = false;
-  return mermaidData;
+async function chatopenai(prompt) {
+  
+  try {
+    loading.value = true;
+    const response = await axios.get('http://172.16.11.95:8889/query/text2chart', {
+      params: { prompt },
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    loading.value = false;
+    const code = response ? response.data.code : null;
+    if (code === 0) {
+        return response.data.data;
+    }
+    
+  } catch (error) {
+      loading.value = false;
+      console.error(error);
+      ElMessage({
+      message: error.response.data.msg || "未知错误",
+      type: 'error',
+      duration: 2000 
+    });
+    return null;
+      throw error;
+    
 }
+
+}
+
 </script>
 
 
@@ -210,7 +225,9 @@ async function chatopenai(content_1, key) {
   --el-color-primary-dark-2: #6779c1;
   --header-height: 80px;
 }
-
+/* img {
+  margin-top: 0px;
+} */
 .main {
   border-radius: 8px;
   box-shadow: 0px 2px 4px 0px rgba(237, 240, 252, 1);
